@@ -1,12 +1,12 @@
 package main
 
 import (
-	// "io"
 	"log"
 	"net/http"
 	"encoding/json"
-	"fmt"
 	"errors"
+	"time"
+	"strconv"
 )
 
 // Woah, why is code a string? code is a four digit number that contains
@@ -28,16 +28,49 @@ func loginHandler (rw http.ResponseWriter, req *http.Request) {
 	loginPostHandler(rw, req)
 }
 
+func validateCode (code string, offset int) (err error) {
+	// If the code was generated within {offset} minutes before
+	// 	or after now, it is a valid code.
+
+	// If offset is 1, the current hour and minute must match
+	//	the code that was generated.
+	if (offset < 1) {
+		return errors.New("Invalid Offset")
+	}
+	str_hour := code[0:2]
+	str_min := code [2:4]
+
+	int_hour, err := strconv.Atoi(str_hour)
+	if err != nil {
+		errors.New("Invalid Code")
+	}
+	int_min, err := strconv.Atoi(str_min)
+	if err != nil {
+		errors.New("Invalid Code")
+	}
+
+	now := time.Now()
+	submitted := time.Date(now.Year(), now.Month(), now.Day(), int_hour, int_min, now.Second(), now.Nanosecond(), time.UTC)
+	max_accept := now.Add(time.Minute * time.Duration(offset))
+	min_accept := now.Add(time.Minute * -1 * time.Duration(offset))
+
+	if ((submitted.Before(max_accept) && submitted.After(min_accept)) || submitted.Equal(now)) {
+		return nil
+	}
+
+	return errors.New("Invalid Code")
+}
+
 func loginPostHandler (rw http.ResponseWriter, req *http.Request) {
     var loginRequest LoginRequest
-	
+
 	// If this was a production environment, we'd hash + salt the password
 	// 	and store in a database so that these passwords aren't stored in
 	//	plaintext. But for now we'll just pretend these are okay.
 
 	validEmail := "c137@onecause.com"
 	validPassword := "#th@nH@rm#y#r!$100%D0p#"
-	// submissionOffeset := 0
+	submissionOffeset := 2
 
     err := json.NewDecoder(req.Body).Decode(&loginRequest)
     if err != nil {
@@ -63,6 +96,12 @@ func loginPostHandler (rw http.ResponseWriter, req *http.Request) {
 
 	if (loginRequest.Email != validEmail || loginRequest.Password != validPassword) {
 		http.Error(rw, errors.New("Invalid username/password combination").Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = validateCode(loginRequest.Code, submissionOffeset)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
 
