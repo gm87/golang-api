@@ -20,12 +20,20 @@ type LoginRequest struct {
 }
 
 func loginHandler (rw http.ResponseWriter, req *http.Request) {
+	// Enable CORS
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "*")
+	
 	// Accept a POST endpoint
-	if (req.Method != "POST") {
+	if (req.Method == "POST") {
+		loginPostHandler(rw, req)
+	} else if (req.Method == "OPTIONS") {
+		return
+	} else {
 		http.Error(rw, errors.New("Method Not Supported").Error(), http.StatusMethodNotAllowed)
 		return
 	}
-	loginPostHandler(rw, req)
+	
 }
 
 func validateCode (code string, offset int) (err error) {
@@ -62,6 +70,8 @@ func validateCode (code string, offset int) (err error) {
 }
 
 func loginPostHandler (rw http.ResponseWriter, req *http.Request) {
+	rw.Header().Set("Content-Type", "application/json")
+
     var loginRequest LoginRequest
 
 	// If this was a production environment, we'd hash + salt the password
@@ -106,12 +116,14 @@ func loginPostHandler (rw http.ResponseWriter, req *http.Request) {
 	}
 
 	// Success: Redirect to http://onecause.com to signify movement to the next page
-	http.Redirect(rw, req, "http://onecause.com", http.StatusMovedPermanently)
+	//	This actually just redirects the fetch request, not the user's browser
+	//	Send an OK response instead and redirect client side
+	// http.Redirect(rw, req, "http://onecause.com", http.StatusMovedPermanently)
 }
 
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/login", loginHandler)
 
-	log.Fatal(http.ListenAndServeTLS(":8080", "/app/cert.pem", "/app/key.pem", mux))
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }
